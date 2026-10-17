@@ -1,0 +1,45 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: greenhouse
+      MYSQL_USER: greenhouse
+      MYSQL_PASSWORD: greenhouse_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://greenhouse:greenhouse_pass@mysql:3306/greenhouse
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      # API_KEY: change-me      # uncomment to protect POST /device-control
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started   # backend reconnects by itself if the broker is late
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  mosquitto_data:
